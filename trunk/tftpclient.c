@@ -78,6 +78,9 @@ int main(int argc, char* argv[]) {
   xdrmem_create(&out_xdrs, out_buff, MAX_PAYLOAD_SIZE, XDR_ENCODE);
 
   /* main loop */
+  puts("Hello. Commands are:\n"
+      "\t\"put <localfile> <remotefile>\" (<remotefile> will be OVERWRITTEN!)\n"
+      "\t\"get <localfile> <remotefile>\" (<localfile> will be OVERWRITTEN!)");
   first = 1;
   while (fgets(line, MAX_LINE_LEN, stdin) != NULL) {
     msg_t msg;
@@ -93,15 +96,35 @@ int main(int argc, char* argv[]) {
       }
       /* gestione dell'operazione */
       if (msg.msg_t_u.req.reqtype == WRQ) {
-        process_PUT(sock, localfilename);
+        /* process WRQ*/
+        FILE* fin;
+        fin = fopen(localfilename, "rb");
+        if (fin == NULL) {
+          fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+        }
+        else {
+          /* si passa ack0 = TRUE, in quanto il server risponde con ACK #0 */
+          put_file(sock, sock, stderr, fin, TRUE);
+          fclose(fin);
+        }
       }
       else {
-        process_GET(sock, localfilename);
+        /* process RRQ */
+        FILE* fout;
+        fout = fopen(localfilename, "wb");
+        if (fout == NULL) {
+          fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+        }
+        else {
+          /* si passa ack0 = FALSE, e' gia' implicito nel messaggio di richiesta */
+          get_file(sock, sock, stderr, fout, FALSE);
+          fclose(fout);
+        }
       }
-      printf("operation complete\n");
+      puts("operation complete");
     }
     else {
-      fprintf(stderr, "command not recognized\n");
+      fprintf(stderr, "local error: command not recognized\n");
     }
   }
   exit(EXIT_SUCCESS);
@@ -159,43 +182,5 @@ void peek_connect(int fd) {
          && (connect(fd, (struct sockaddr*)&addr, addr_len) == 0) )) {
     err(EXIT_FAILURE, "performing peek and connect");
   }
-}
-
-
-/**
- *  PROCESS PUT
-**/
-void process_PUT(int fd, const char* filename) {
-  FILE* fin;
-
-  fin = fopen(filename, "rb");
-  if (fin == NULL) {
-    write_ERR(fd, ACCESS_VIOLATION, "opening file");
-    fprintf(stderr, "error opening %s\n", filename);
-    return;
-  }
-
-  put_file(fd, fd, stderr, fin, TRUE);
-
-  fclose(fin);
-}
-
-
-/**
- *  PROCESS GET
-**/
-void process_GET(int fd, const char* filename) {
-  FILE* fout;
-
-  fout = fopen(filename, "wb");
-  if (fout == NULL) {
-    write_ERR(fd, ACCESS_VIOLATION, "opening file");
-    fprintf(stderr, "error opening %s\n", filename);
-    return;
-  }
-
-  get_file(fd, fd, stderr, fout, FALSE);
-
-  fclose(fout);
 }
 

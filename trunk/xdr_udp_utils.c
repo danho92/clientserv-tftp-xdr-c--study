@@ -8,7 +8,9 @@
 #include "xdr_udp_utils.h"
 
 
+/* prototipo del metodo di encoding usato da write_msg e sendto_msg */
 u_int encode_msg(msg_t* msg);
+
 
 /**
  *  READ TFTP PDU | DECODE
@@ -42,6 +44,18 @@ bool_t read_msg(int fd, msg_t* msg) {
 
 
 /**
+ *  ENCODE TFTP MESSAGE
+**/
+u_int encode_msg(msg_t* msg) {
+  u_int size;
+  if (! ((xdr_setpos(&out_xdrs, 0) == TRUE) &&
+         (xdr_msg_t(&out_xdrs, msg) == TRUE)) ) {
+    exit(EXIT_FAILURE);
+  }
+  return xdr_getpos(&out_xdrs) + 1;
+}
+
+/**
  *  ENCODE TFTP MESSAGE | WRITE
 **/
 void write_msg(int fd, msg_t* msg) {
@@ -56,21 +70,10 @@ void write_msg(int fd, msg_t* msg) {
 **/
 void sendto_msg(int fd, struct sockaddr_in* srv_addr, msg_t* msg) {
   u_int size = encode_msg(msg);
-  if (sendto(fd, out_buff, size, 0, (struct sockaddr*)srv_addr, sizeof(struct sockaddr_in)) != size) {
+  if (sendto(fd, out_buff, size, 0,
+              (struct sockaddr*)srv_addr, sizeof(struct sockaddr_in)) != size) {
     exit(EXIT_FAILURE);
   }
-}
-
-/**
- *  ENCODE TFTP MESSAGE
-**/
-u_int encode_msg(msg_t* msg) {
-  u_int size;
-  if (! ((xdr_setpos(&out_xdrs, 0) == TRUE) &&
-         (xdr_msg_t(&out_xdrs, msg) == TRUE)) ) {
-    exit(EXIT_FAILURE);
-  }
-  return xdr_getpos(&out_xdrs) + 1;
 }
 
 
@@ -95,8 +98,9 @@ void write_ERR(int fd, errcode_t errcode, char* errstr) {
   write_msg(fd, &msg);
 }
 
+
 /**
- *  ERROR REPORTING ROUTINE
+ *  ERROR REPORT
 **/
 void err_rep(FILE* local, int remote_fd, errcode_t errcode, char* errstr) {
   if (local != NULL) {
@@ -169,7 +173,7 @@ void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
     try += 1;
   }
 
-  /* niente errori, ma troppi timeout */
+  /* niente errori, ma troppi tentativi */
   if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
     err_rep(ferr, out, NOT_DEFINED, "timeout");
   }
@@ -255,7 +259,7 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
       try += 1;
     }
 
-    /* niente errori, ma troppi timeout */
+    /* niente errori, ma troppi tentativi */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
       error = TRUE;
       err_rep(ferr, out, NOT_DEFINED, "timeout");

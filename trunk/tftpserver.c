@@ -83,7 +83,6 @@ int main(int argc, char* argv[]) {
 
     /* passaggio del controllo al server tftp */
     server_loop();
-
     exit(EXIT_SUCCESS);
   }
   /* PARENT */
@@ -98,13 +97,14 @@ void server_loop() {
   msg_t msg;
   int try;
 
+  try = 0;
+
   /* decodifica del primo messaggio. se valido, si salta la fase di fetch */
   memset(&msg, 0x00, sizeof(msg));
   if (xdr_msg_t(&in_xdrs, &msg) == TRUE) {
     goto CHECK_REQ;
   }
 
-  try = 0;
   while (try < MAX_TRY_COUNT) {
     if (read_msg(0, &msg) == TRUE) {
       /* messaggio valido */
@@ -128,7 +128,7 @@ void server_loop() {
   /* il client probabilmente non ricevera' questo messaggio.            *
    * in ogni caso terminera' alla prossima richiesta, per un errore di  *
    * invio (host unreachable) (testato)                                 */
-  err_rep(stderr, 1, NOT_DEFINED, "timeout. type faster!");
+  err_rep(NULL, 1, NOT_DEFINED, "timeout - type faster!");
 
   return;
 }
@@ -142,7 +142,7 @@ void process_WRQ(const char* filename) {
 
   fout = fopen(filename, "wb");
   if (fout == NULL) {
-    write_ERR(1, ACCESS_VIOLATION, "opening file");
+    err_rep(NULL, 1, ACCESS_VIOLATION, "opening file");
     return;
   }
 
@@ -160,7 +160,7 @@ void process_RRQ(const char* filename) {
 
   fin = fopen(filename, "rb");
   if (fin == NULL) {
-    write_ERR(1, ACCESS_VIOLATION, "opening file");
+    err_rep(NULL, 1, ACCESS_VIOLATION, "opening file");
     return;
   }
 
