@@ -12,10 +12,11 @@
 u_int encode_msg(msg_t* msg);
 
 
+
 /**
  *  READ TFTP PDU | DECODE
 **/
-bool_t read_msg(int fd, msg_t* msg) {
+read_msg_ret_t read_msg(int fd, msg_t* msg) {
   fd_set fds;
   int rdy_count;
   struct timeval timeout = {TIMEOUT, 0};
@@ -25,7 +26,7 @@ bool_t read_msg(int fd, msg_t* msg) {
   rdy_count = select(fd + 1, &fds, NULL, NULL, &timeout);
   switch (rdy_count) {
     case 0:
-      return FALSE;
+      return RET_TIMEOUT;
     case 1:
       if ( (read(fd, in_buff, MAX_PAYLOAD_SIZE) > 0) &&
            (xdr_setpos(&in_xdrs, 0) == TRUE) ) {
@@ -35,11 +36,10 @@ bool_t read_msg(int fd, msg_t* msg) {
     default:
       /* errore fatale read o select */
       exit(EXIT_FAILURE);
-      break;
   }
   /* tentativo di conversione XDR del messaggio */
   memset(msg, 0x00, sizeof(msg_t));
-  return (xdr_msg_t(&in_xdrs, msg) == TRUE);
+  return (xdr_msg_t(&in_xdrs, msg) == TRUE)? XDR_OK:XDR_FAIL;
 }
 
 
@@ -128,54 +128,67 @@ void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
   blocknum = 1;
   try = 0;
   while ((try < MAX_TRY_COUNT) && (error == FALSE)) {
-    if (read_msg(in, &msg) == TRUE) {
-      /* messaggio TFTP valido */
-      switch (msg.op) {
-        case DAT:       // DAT
-          dat = &(msg.msg_t_u.dat);
-          switch (blocknum - (dat->blocknum)) {
-            case 0:      // DAT esatto
-              if (fwrite(dat->payload.payload_val, dat->payload.payload_len, 1, fout) != 1) {
-                err_rep(ferr, out, ACCESS_VIOLATION, "writing output file");
+    switch (read_msg(in, &msg) {
+      case XDR_OK):                                     /* 1: messaggio TFTP  */
+        switch (msg.op) {
+
+          case DAT:                                     /* 1.1: mess. DAT     */
+            dat = &(msg.msg_t_u.dat);
+            switch (blocknum - (dat->blocknum)) {
+              case 0:                                   /* 1.1.A: DAT giusto  */
+                if (fwrite(dat->payload.payload_val, dat->payload.payload_len, 1, fout) != 1) {
+                  err_rep(ferr, out, ACCESS_VIOLATION, "writing output file");
+                  error = TRUE;
+                }
+                write_ACK(out, blocknum);
+                if (dat->payload.payload_len < MAX_BLOCK_LEN) {
+                  xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+                  return; // PUNTO DI USCITA 'CANONICO'
+                }
+                blocknum += 1;
+                try = 0;
+                break;
+              case 1:                                   /* 1.1.B: DAT preced. */
+                write_ACK(out, blocknum - 1);
+                try += 1;
+                break;
+              default:                                  /* 1.1.C: DAT errato  */
+                err_rep(ferr, out, ILL_OP_TFTP, "bad DAT");
                 error = TRUE;
-              }
-              write_ACK(out, blocknum);
-              if (dat->payload.payload_len < MAX_BLOCK_LEN) {
-                xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
-                return; // PUNTO DI USCITA 'CANONICO'
-              }
-              blocknum += 1;
-              try = -1;
-              break;
-            case 1:  // DAT precedente
-              write_ACK(out, blocknum - 1);
-              try = -1;
-              break;
-            default:            // DAT errato
-              err_rep(ferr, out, ILL_OP_TFTP, "bad DAT");
-              error = TRUE;
-              break;
-          }
-          break;
-        case ERR:       // ERR
-          if (ferr != NULL) {
-            fprintf(ferr, "remote error: %s\n", msg.msg_t_u.err.errstr);
-          }
-          error = TRUE;
-          break;
-        default:        // ALTRO
-          err_rep(ferr, out, ILL_OP_TFTP, "not DAT");
-          error = TRUE;
-          break;
-      }
-      xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+                break;
+            }
+            break;
+
+          case ERR:                                     /* 1.2: mess. ERR     */
+            if (ferr != NULL) {
+              fprintf(ferr, "remote error: %s\n", msg.msg_t_u.err.errstr);
+            }
+            error = TRUE;
+            break;
+
+          default:                                      /* 1.3: altro mess.   */
+            err_rep(ferr, out, ILL_OP_TFTP, "not DAT");
+            error = TRUE;
+            break;
+        }
+        xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+        break;
+
+      case XDR_FAIL:                                    /* 2: mess. non TFTP  */
+        err_rep(ferr, out, ILL_OP_TFTP, "TFTP message expected");
+        error = TRUE;
+        break;
+
+      case RET_TIMEOUT:                                 /* 3: select timeout  */
+        try +=1;
+        break;
+
     }
-    try += 1;
   }
 
   /* niente errori, ma troppi tentativi */
   if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-    err_rep(ferr, out, NOT_DEFINED, "timeout");
+    err_rep(ferr, out, NOT_DEFINED, "too many timeout");
   }
 
 }
@@ -215,6 +228,7 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
 
     /* lettura del blocco dal file */
     size = fread(buff, 1, MAX_BLOCK_LEN, fin);
+    fprintf(stderr,"%d\n",size);
     if (size < 0) {
       err_rep(ferr, out, ACCESS_VIOLATION, "reading file");
       return;

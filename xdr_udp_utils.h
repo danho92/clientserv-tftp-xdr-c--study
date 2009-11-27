@@ -14,7 +14,6 @@
 
 #define PORT_ANY            (htons(0))
 
-
 /* gli stream xdr vanno inizializzati (con xdrmem_create) prima dell' *
  * utilizzo delle funzioni che lavorano con XDR                       */
 extern XDR in_xdrs;
@@ -23,9 +22,17 @@ extern XDR out_xdrs;
 extern char out_buff[MAX_PAYLOAD_SIZE];
 
 
+
+typedef enum read_msg_ret {
+  XDR_OK,
+  XDR_FAIL,
+  RET_TIMEOUT
+} read_msg_ret_t;
+
+
 /* ricezione e deserializzazione (la xdr_free e' ovviamente a carico del  *
  * destinatario)                                                          */
-bool_t read_msg(int fd, msg_t* msg);
+read_msg_ret_t read_msg(int fd, msg_t* msg);
 
 /* serializzazione e invio */
 void write_msg(int fd, msg_t* msg);
