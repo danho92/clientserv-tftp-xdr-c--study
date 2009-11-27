@@ -27,6 +27,9 @@ char in_buff[MAX_PAYLOAD_SIZE];
 XDR out_xdrs;
 char out_buff[MAX_PAYLOAD_SIZE];
 
+bool_t USE_STDERR = TRUE;
+
+
 /**
  *  CLIENT MAIN
 **/
@@ -104,7 +107,7 @@ int main(int argc, char* argv[]) {
         }
         else {
           /* si passa ack0 = TRUE, in quanto il server risponde con ACK #0 */
-          put_file(sock, sock, stderr, fin, TRUE);
+          put_file(sock, sock, fin, TRUE);
           fclose(fin);
         }
       }
@@ -117,7 +120,7 @@ int main(int argc, char* argv[]) {
         }
         else {
           /* si passa ack0 = FALSE, e' gia' implicito nel messaggio di richiesta */
-          get_file(sock, sock, stderr, fout, FALSE);
+          get_file(sock, sock, fout, FALSE);
           fclose(fout);
         }
       }

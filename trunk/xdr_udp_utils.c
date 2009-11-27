@@ -102,18 +102,18 @@ void write_ERR(int fd, errcode_t errcode, char* errstr) {
 /**
  *  ERROR REPORT
 **/
-void err_rep(FILE* local, int remote_fd, errcode_t errcode, char* errstr) {
-  if (local != NULL) {
-    fprintf(local, "local error: %s\n", errstr);
+void err_rep(int fd, errcode_t errcode, char* errstr) {
+  if (USE_STDERR == TRUE) {
+    fprintf(stderr, "local error: %s\n", errstr);
   }
-  write_ERR(remote_fd, errcode, errstr);
+  write_ERR(fd, errcode, errstr);
 }
 
 
 /**
  *  GET FILE FROM NETWORK
 **/
-void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
+void get_file(int in, int out, FILE* fout, bool_t ack0) {
   msg_t msg;
   dat_t* dat;
   blockn_t blocknum;
@@ -128,8 +128,9 @@ void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
   blocknum = 1;
   try = 0;
   while ((try < MAX_TRY_COUNT) && (error == FALSE)) {
-    switch (read_msg(in, &msg) {
-      case XDR_OK):                                     /* 1: messaggio TFTP  */
+    switch (read_msg(in, &msg)) {
+      /************************************************************************/
+      case XDR_OK:                                      /* 1: messaggio TFTP  */
         switch (msg.op) {
 
           case DAT:                                     /* 1.1: mess. DAT     */
@@ -137,61 +138,64 @@ void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
             switch (blocknum - (dat->blocknum)) {
               case 0:                                   /* 1.1.A: DAT giusto  */
                 if (fwrite(dat->payload.payload_val, dat->payload.payload_len, 1, fout) != 1) {
-                  err_rep(ferr, out, ACCESS_VIOLATION, "writing output file");
+                  err_rep(out, ACCESS_VIOLATION, "writing output file");
                   error = TRUE;
                 }
-                write_ACK(out, blocknum);
-                if (dat->payload.payload_len < MAX_BLOCK_LEN) {
-                  xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
-                  return; // PUNTO DI USCITA 'CANONICO'
+                else {
+                  /* la scrittura e' andata a buon fine */
+                  write_ACK(out, blocknum);
+                  if (dat->payload.payload_len < MAX_BLOCK_LEN) {
+                    xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+                    /* OPERAZIONE COMPLETATA CON SUCCESSO */
+                    return;
+                  }
+                  try = 0;
+                  blocknum += 1;
                 }
-                blocknum += 1;
-                try = 0;
                 break;
               case 1:                                   /* 1.1.B: DAT preced. */
                 write_ACK(out, blocknum - 1);
+                /* l'ack precedente e' andato perso: aumento del try count*/
                 try += 1;
                 break;
               default:                                  /* 1.1.C: DAT errato  */
-                err_rep(ferr, out, ILL_OP_TFTP, "bad DAT");
+                err_rep(out, ILL_OP_TFTP, "bad DAT");
                 error = TRUE;
                 break;
             }
             break;
 
           case ERR:                                     /* 1.2: mess. ERR     */
-            if (ferr != NULL) {
-              fprintf(ferr, "remote error: %s\n", msg.msg_t_u.err.errstr);
+            if (USE_STDERR == TRUE) {
+              fprintf(stderr, "remote error: %s\n", msg.msg_t_u.err.errstr);
             }
             error = TRUE;
             break;
 
           default:                                      /* 1.3: altro mess.   */
-            err_rep(ferr, out, ILL_OP_TFTP, "not DAT");
+            err_rep(out, ILL_OP_TFTP, "not DAT");
             error = TRUE;
             break;
         }
         xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
         break;
-
+      /************************************************************************/
       case XDR_FAIL:                                    /* 2: mess. non TFTP  */
-        err_rep(ferr, out, ILL_OP_TFTP, "TFTP message expected");
+        err_rep(out, ILL_OP_TFTP, "TFTP message expected");
         error = TRUE;
         break;
-
+      /************************************************************************/
       case RET_TIMEOUT:                                 /* 3: select timeout  */
         try +=1;
         break;
-
     }
   }
 
   /* niente errori, ma troppi tentativi */
   if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-    err_rep(ferr, out, NOT_DEFINED, "too many timeout");
+    err_rep(out, NOT_DEFINED, "too many timeout");
   }
-
-}
+} /* END OF: get_file() */
 
 
 
@@ -199,7 +203,7 @@ void get_file(int in, int out, FILE* ferr, FILE* fout, bool_t ack0) {
 /**
  *  PUT FILE ON NETWORK
 **/
-void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
+void put_file(int in, int out, FILE* fin, bool_t ack0) {
   msg_t out_msg;
   dat_t* dat;
   blockn_t blocknum;
@@ -228,9 +232,9 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
 
     /* lettura del blocco dal file */
     size = fread(buff, 1, MAX_BLOCK_LEN, fin);
-    fprintf(stderr,"%d\n",size);
+    //fprintf(stderr,"%d\n",size); TEMP
     if (size < 0) {
-      err_rep(ferr, out, ACCESS_VIOLATION, "reading file");
+      err_rep(out, ACCESS_VIOLATION, "reading file");
       return;
     }
     /* preparazione dat */
@@ -238,7 +242,7 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
     dat->payload.payload_len = size;
     dat->payload.payload_val = malloc(size);
     if (dat->payload.payload_val == NULL) {
-      err_rep(ferr, out, ACCESS_VIOLATION, "allocating memory");
+      err_rep(out, ACCESS_VIOLATION, "allocating memory");
       /* questo e' un errore grave, si decide di uscire bruscamente */
       exit(EXIT_FAILURE);
     }
@@ -249,7 +253,7 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
     while (try < MAX_TRY_COUNT) {
       write_msg(out, &out_msg);
       READ:
-      if (read_msg(in, &in_msg) == TRUE) {
+      if (read_msg(in, &in_msg) == XDR_OK) {
         /* messaggio TFTP valido */
         if ((in_msg.op == ACK) && (in_msg.msg_t_u.ack.blocknum == blocknum)) {
           /* messaggio atteso */
@@ -258,12 +262,12 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
         }
         /* messaggio inatteso */
         else  if (in_msg.op == ERR) {
-                if (ferr != NULL) {
-                  fprintf(ferr, "remote error: %s\n", in_msg.msg_t_u.err.errstr);
+                if (USE_STDERR == TRUE) {
+                  fprintf(stderr, "remote error: %s\n", in_msg.msg_t_u.err.errstr);
                 }
               }
               else {
-                err_rep(ferr, out, ILL_OP_TFTP, "not ACK/bad ACK");
+                err_rep(out, ILL_OP_TFTP, "not ACK/bad ACK");
               }
         error = TRUE;
         xdr_free((xdrproc_t)xdr_msg_t, (char*)&in_msg);
@@ -276,7 +280,7 @@ void put_file(int in, int out, FILE* ferr, FILE* fin, bool_t ack0) {
     /* niente errori, ma troppi tentativi */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
       error = TRUE;
-      err_rep(ferr, out, NOT_DEFINED, "timeout");
+      err_rep(out, NOT_DEFINED, "too many timeout");
     }
 
     /* free del payload; check del puntatore perche' il flag ack0 settato *

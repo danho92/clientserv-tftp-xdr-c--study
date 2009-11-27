@@ -23,6 +23,8 @@ char in_buff[MAX_PAYLOAD_SIZE];
 XDR out_xdrs;
 char out_buff[MAX_PAYLOAD_SIZE];
 
+bool_t USE_STDERR = FALSE;
+
 
 /**
  *  MAIN
@@ -106,7 +108,7 @@ void server_loop() {
   }
 
   while (try < MAX_TRY_COUNT) {
-    if (read_msg(0, &msg) == TRUE) {
+    if (read_msg(0, &msg) == XDR_OK) {
       /* messaggio valido */
       CHECK_REQ:
       if (msg.op == REQ) {
@@ -128,7 +130,7 @@ void server_loop() {
   /* il client probabilmente non ricevera' questo messaggio.            *
    * in ogni caso terminera' alla prossima richiesta, per un errore di  *
    * invio (host unreachable) (testato)                                 */
-  err_rep(NULL, 1, NOT_DEFINED, "timeout - type faster!");
+  err_rep(1, NOT_DEFINED, "timeout - type faster!");
 
   return;
 }
@@ -142,11 +144,11 @@ void process_WRQ(const char* filename) {
 
   fout = fopen(filename, "wb");
   if (fout == NULL) {
-    err_rep(NULL, 1, ACCESS_VIOLATION, "opening file");
+    err_rep(1, ACCESS_VIOLATION, "opening file");
     return;
   }
 
-  get_file(0, 1, NULL, fout, TRUE);
+  get_file(0, 1, fout, TRUE);
 
   fclose(fout);
 }
@@ -160,11 +162,11 @@ void process_RRQ(const char* filename) {
 
   fin = fopen(filename, "rb");
   if (fin == NULL) {
-    err_rep(NULL, 1, ACCESS_VIOLATION, "opening file");
+    err_rep(1, ACCESS_VIOLATION, "opening file");
     return;
   }
 
-  put_file(0, 1, NULL, fin, FALSE);
+  put_file(0, 1, fin, FALSE);
 
   fclose(fin);
 }
