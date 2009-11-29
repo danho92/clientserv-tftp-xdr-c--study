@@ -1,6 +1,7 @@
 #ifndef _XDR_UDP_UTILS_H_
 #define _XDR_UDP_UTILS_H_
 
+
 #include <rpc/xdr.h>
 
 #include <stdio.h>
@@ -25,7 +26,7 @@ extern char out_buff[MAX_RAW_MSG_SIZE];
 extern bool_t USE_STDERR;
 
 
-/* tipo del valore di ritorno della funzione read_msg() */
+/* tipo di ritorno delle funzioni di ricezione e decoding a timeout */
 typedef enum read_msg_ret {
   XDR_OK,
   XDR_FAIL,
@@ -33,22 +34,23 @@ typedef enum read_msg_ret {
 } read_msg_ret_t;
 
 
-/* ricezione e deserializzazione (la xdr_free e' ovviamente a carico del  *
- * destinatario)                                                          */
+/* ricezione e decoding a timeout (xdr_free a carico del destinatario) */
 read_msg_ret_t read_msg(int fd, msg_t* msg);
+read_msg_ret_t recvfrom_msg(int sock, msg_t* msg, int flags,
+                            struct sockaddr_in *addr, socklen_t *addr_len);
 
-/* serializzazione e invio */
+/* encoding e invio */
 void write_msg(int fd, msg_t* msg);
-void sendto_msg(int fd, struct sockaddr_in* srv_addr, msg_t* msg);
+void sendto_msg(int sock, struct sockaddr_in* srv_addr, msg_t* msg);
 
-/* routine di error reporting */
+/* routine di error reporting remota (e locale se USE_STDERR = TRUE) */
 void err_rep(int fd, errcode_t errcode, char* errstr);
 
-/* serializzazione e invio per messaggi ERR ed ACK */
+/* shortcut per encoding e invio di messaggi ERR ed ACK */
 void write_ERR(int fd, errcode_t errcode, char* errstr);
 void write_ACK(int fd, blockn_t blocknum);
 
-/* routine di invio/ricezione file utili sia al server che al client */
+/* routine di invio/ricezione file (implementazione del protocollo TFTP) */
 void get_file(int in, int out, FILE* fout, bool_t ack0);
 void put_file(int in, int out, FILE* fin, bool_t ack0);
 

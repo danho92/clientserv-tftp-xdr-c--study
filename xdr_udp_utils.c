@@ -24,9 +24,8 @@ bool_t decode_msg(msg_t* msg) {
   return xdr_msg_t(&in_xdrs, msg);
 }
 
-
 /**
- *  READ TFTP PDU | DECODE
+ *  READ TFTP MESSAGE | DECODE
 **/
 read_msg_ret_t read_msg(int fd, msg_t* msg) {
   fd_set fds;
@@ -45,6 +44,31 @@ read_msg_ret_t read_msg(int fd, msg_t* msg) {
       }
   }
   /* errore fatale read o select */
+  exit(EXIT_FAILURE);
+}
+
+/**
+ *  RECVFROM TFTP MESSAGE | DECODE
+**/
+read_msg_ret_t recvfrom_msg(int sock, msg_t* msg, int flags,
+                            struct sockaddr_in *addr, socklen_t *addr_len) {
+  fd_set fds;
+  int rdy_count;
+  struct timeval timeout = {TIMEOUT, 0};
+
+  FD_ZERO(&fds);
+  FD_SET(sock, &fds);
+  rdy_count = select(sock + 1, &fds, NULL, NULL, &timeout);
+  switch (rdy_count) {
+    case 0:
+      return RET_TIMEOUT;
+    case 1:
+      if (recvfrom(sock, in_buff, MAX_BLOCK_SIZE, flags,
+        (struct sockaddr*)addr, addr_len) > 0) {
+        return (decode_msg(msg) == TRUE)? XDR_OK:XDR_FAIL;
+      }
+  }
+  /* errore fatale recvfrom o select */
   exit(EXIT_FAILURE);
 }
 
@@ -74,9 +98,9 @@ void write_msg(int fd, msg_t* msg) {
 /**
  *  ENCODE TFTP MESSAGE | SENDTO
 **/
-void sendto_msg(int fd, struct sockaddr_in* srv_addr, msg_t* msg) {
+void sendto_msg(int sock, struct sockaddr_in* srv_addr, msg_t* msg) {
   u_int size = encode_msg(msg);
-  if (sendto(fd, out_buff, size, 0,
+  if (sendto(sock, out_buff, size, 0,
               (struct sockaddr*)srv_addr, sizeof(struct sockaddr_in)) != size) {
     exit(EXIT_FAILURE);
   }
