@@ -1,7 +1,7 @@
 
 const MAX_FILENAME_LEN  = 500;
 const MAX_MODE_LEN      = 5;
-const MAX_BLOCK_LEN     = 512;
+const MAX_BLOCK_SIZE  = 512;
 const MAX_ERRSTR_LEN    = 100;
 
 
@@ -40,7 +40,7 @@ struct req_t {
 
 struct dat_t {
   blockn_t    blocknum;
-  opaque      payload<MAX_BLOCK_LEN>;
+  opaque      block<MAX_BLOCK_SIZE>;
 };
 
 struct ack_t {

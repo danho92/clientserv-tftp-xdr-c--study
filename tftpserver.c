@@ -19,9 +19,9 @@ void process_RRQ(const char* filename);
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
  * casi eccezionali (es. inizializzazione e prima recvfrom() )            */
 XDR in_xdrs;
-char in_buff[MAX_PAYLOAD_SIZE];
+char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
-char out_buff[MAX_PAYLOAD_SIZE];
+char out_buff[MAX_RAW_MSG_SIZE];
 
 bool_t USE_STDERR = FALSE;
 
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
   memset(&cli_addr, 0x00, cli_addr_len);
 
   /* ricezione del primo messaggio */
-  if (recvfrom(0, in_buff, MAX_PAYLOAD_SIZE, 0,
+  if (recvfrom(0, in_buff, MAX_BLOCK_SIZE, 0,
       (struct sockaddr*)&cli_addr, &cli_addr_len) <= 0) {
     exit(EXIT_FAILURE); // "initial recvfrom() gone wrong."
   }
@@ -80,8 +80,8 @@ int main(int argc, char* argv[]) {
     }
 
     /* init degli stream xdr */
-    xdrmem_create(&in_xdrs,  in_buff,  MAX_PAYLOAD_SIZE, XDR_DECODE);
-    xdrmem_create(&out_xdrs, out_buff, MAX_PAYLOAD_SIZE, XDR_ENCODE);
+    xdrmem_create(&in_xdrs,  in_buff,  MAX_RAW_MSG_SIZE, XDR_DECODE);
+    xdrmem_create(&out_xdrs, out_buff, MAX_RAW_MSG_SIZE, XDR_ENCODE);
 
     /* passaggio del controllo al server tftp */
     server_loop();
