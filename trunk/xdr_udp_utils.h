@@ -8,7 +8,7 @@
 #include "tftp.h"
 
 
-#define MAX_PAYLOAD_SIZE    (8192)
+#define MAX_RAW_MSG_SIZE    (8192)
 #define TIMEOUT             (2)
 #define MAX_TRY_COUNT       (16)
 #define PORT_ANY            (htons(0))
@@ -17,9 +17,9 @@
 /* gli stream xdr vanno inizializzati (con xdrmem_create) prima dell' *
  * utilizzo delle funzioni che lavorano con XDR                       */
 extern XDR in_xdrs;
-extern char in_buff[MAX_PAYLOAD_SIZE];
+extern char in_buff[MAX_RAW_MSG_SIZE];
 extern XDR out_xdrs;
-extern char out_buff[MAX_PAYLOAD_SIZE];
+extern char out_buff[MAX_RAW_MSG_SIZE];
 
 /* TRUE se stderr e' disponibile */
 extern bool_t USE_STDERR;

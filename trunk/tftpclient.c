@@ -23,9 +23,9 @@ void process_GET(int fd, const char* filename);
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
  * casi eccezionali (es. inizializzazione e prima recvfrom() )            */
 XDR in_xdrs;
-char in_buff[MAX_PAYLOAD_SIZE];
+char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
-char out_buff[MAX_PAYLOAD_SIZE];
+char out_buff[MAX_RAW_MSG_SIZE];
 
 bool_t USE_STDERR = TRUE;
 
@@ -77,8 +77,8 @@ int main(int argc, char* argv[]) {
   }
 
   /* init degli stream xdr */
-  xdrmem_create(&in_xdrs,  in_buff,  MAX_PAYLOAD_SIZE, XDR_DECODE);
-  xdrmem_create(&out_xdrs, out_buff, MAX_PAYLOAD_SIZE, XDR_ENCODE);
+  xdrmem_create(&in_xdrs,  in_buff,  MAX_RAW_MSG_SIZE, XDR_DECODE);
+  xdrmem_create(&out_xdrs, out_buff, MAX_RAW_MSG_SIZE, XDR_ENCODE);
 
   /* main loop */
   puts("Hello. Commands are:\n"

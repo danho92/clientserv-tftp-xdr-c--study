@@ -8,9 +8,21 @@
 #include "xdr_udp_utils.h"
 
 
+/* prototipo del metodo di decoding usato da read_msg e recvfrom_msg */
+bool_t decode_msg(msg_t* msg);
+
 /* prototipo del metodo di encoding usato da write_msg e sendto_msg */
 u_int encode_msg(msg_t* msg);
 
+
+/**
+ *  DECODE TFTP MESSAGE
+**/
+bool_t decode_msg(msg_t* msg) {
+  if (xdr_setpos(&in_xdrs, 0) == FALSE) return FALSE;
+  memset(msg, 0x00, sizeof(msg_t));
+  return xdr_msg_t(&in_xdrs, msg);
+}
 
 
 /**
@@ -28,18 +40,12 @@ read_msg_ret_t read_msg(int fd, msg_t* msg) {
     case 0:
       return RET_TIMEOUT;
     case 1:
-      if ( (read(fd, in_buff, MAX_PAYLOAD_SIZE) > 0) &&
-           (xdr_setpos(&in_xdrs, 0) == TRUE) ) {
-        /* lettura e reset dello stream xdr ok */
-        break;
+      if (read(fd, in_buff, MAX_BLOCK_SIZE) > 0) {
+        return (decode_msg(msg) == TRUE)? XDR_OK:XDR_FAIL;
       }
-    default:
-      /* errore fatale read o select */
-      exit(EXIT_FAILURE);
   }
-  /* tentativo di conversione XDR del messaggio */
-  memset(msg, 0x00, sizeof(msg_t));
-  return (xdr_msg_t(&in_xdrs, msg) == TRUE)? XDR_OK:XDR_FAIL;
+  /* errore fatale read o select */
+  exit(EXIT_FAILURE);
 }
 
 
@@ -137,14 +143,14 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
             dat = &(msg.msg_t_u.dat);
             switch (blocknum - (dat->blocknum)) {
               case 0:                                   /* 1.1-A: DAT giusto  */
-                if (fwrite(dat->payload.payload_val, dat->payload.payload_len, 1, fout) != 1) {
+                if (fwrite(dat->block.block_val, dat->block.block_len, 1, fout) != 1) {
                   err_rep(out, ACCESS_VIOLATION, "writing output file");
                   error = TRUE;
                 }
                 else {
                   /* la scrittura e' andata a buon fine */
                   write_ACK(out, blocknum);
-                  if (dat->payload.payload_len < MAX_BLOCK_LEN) {
+                  if (dat->block.block_len < MAX_BLOCK_SIZE) {
                     xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
                     /* OPERAZIONE COMPLETATA CON SUCCESSO */
                     return;
@@ -211,7 +217,7 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
 
   out_msg.op = DAT;
   dat = &(out_msg.msg_t_u.dat);
-  dat->payload.payload_val = NULL;
+  dat->block.block_val = NULL;
 
   error = FALSE;
   try = 0;
@@ -219,18 +225,18 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
   /* se e' richiesta la ricezione di ACK #0 occorre inizializzare in maniera  *
    * differente alcune variabili, e saltare dentro al ciclo di ricezione      */
   if (ack0 == TRUE) {
-    size = MAX_BLOCK_LEN;
+    size = MAX_BLOCK_SIZE;
     blocknum = 0;
     goto READ;
   }
 
   blocknum = 1;
   do {
-    char buff[MAX_BLOCK_LEN];
+    char buff[MAX_BLOCK_SIZE];
     msg_t in_msg;
 
     /* lettura del blocco dal file */
-    size = fread(buff, 1, MAX_BLOCK_LEN, fin);
+    size = fread(buff, 1, MAX_BLOCK_SIZE, fin);
     //fprintf(stderr,"%d\n",size); TEMP
     if (size < 0) {
       err_rep(out, ACCESS_VIOLATION, "reading file");
@@ -238,14 +244,14 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
     }
     /* preparazione dat */
     dat->blocknum = blocknum;
-    dat->payload.payload_len = size;
-    dat->payload.payload_val = malloc(size);
-    if (dat->payload.payload_val == NULL) {
+    dat->block.block_len = size;
+    dat->block.block_val = malloc(size);
+    if (dat->block.block_val == NULL) {
       err_rep(out, ACCESS_VIOLATION, "allocating memory");
       /* questo e' un errore grave, si esce bruscamente */
       exit(EXIT_FAILURE);
     }
-    memcpy(dat->payload.payload_val, buff, size);
+    memcpy(dat->block.block_val, buff, size);
 
     /* tentativi di invio */
     do {
@@ -300,12 +306,12 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
       error = TRUE;
     }
 
-    /* free del payload; check del puntatore perche' il flag ack0 settato *
+    /* free del blocco; check del puntatore perche' il flag ack0 settato *
      * fa evitare la prima malloc()                                       */
-    if (dat->payload.payload_val != NULL) {
-      free(dat->payload.payload_val);
+    if (dat->block.block_val != NULL) {
+      free(dat->block.block_val);
     }
 
-  } while ((error == FALSE) && (size == MAX_BLOCK_LEN));
+  } while ((error == FALSE) && (size == MAX_BLOCK_SIZE));
 } /* END OF: put_file() */
 
