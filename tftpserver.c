@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     xdrmem_create(&in_xdrs,  in_buff,  MAX_RAW_MSG_SIZE, XDR_DECODE);
     xdrmem_create(&out_xdrs, out_buff, MAX_RAW_MSG_SIZE, XDR_ENCODE);
 
-    /* passaggio del controllo al server tftp */
+    /* passaggio del controllo al server TFTP */
     server_loop();
     exit(EXIT_SUCCESS);
   }
@@ -119,7 +119,7 @@ void server_loop() {
         else {
           process_RRQ(msg.msg_t_u.req.filename);
         }
-        try = -1;
+        try = 0;
       }
       /* free del messaggio (non e' piu' necessario) */
       xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
