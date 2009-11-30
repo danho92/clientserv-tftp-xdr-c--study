@@ -15,10 +15,9 @@
 #define MAX_LINE_LEN        (512)
 
 
+void client_loop(int sock, struct sockaddr_in* first_addr);
 bool_t parse_req(char* line, msg_t* msg, char** localfilename);
-void peek_connect(int fd);
-void process_PUT(int fd, const char* filename);
-void process_GET(int fd, const char* filename);
+bool_t wait_reply(int sock, bool_t first);
 
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
  * casi eccezionali (es. inizializzazione e prima recvfrom() )            */
@@ -38,8 +37,6 @@ int main(int argc, char* argv[]) {
   char *end_ptr;
   int sock;
   struct sockaddr_in srv_addr, cli_addr;
-  char line[MAX_LINE_LEN];
-  int first;
 
   /* check degli argomenti e inizializzazioni */
   if (argc < 3) {
@@ -80,57 +77,83 @@ int main(int argc, char* argv[]) {
   xdrmem_create(&in_xdrs,  in_buff,  MAX_RAW_MSG_SIZE, XDR_DECODE);
   xdrmem_create(&out_xdrs, out_buff, MAX_RAW_MSG_SIZE, XDR_ENCODE);
 
-  /* main loop */
-  puts("Hello. Commands are:\n"
+  /* passaggio del controllo al client TFTP */
+  client_loop(sock, &srv_addr);
+
+  exit(EXIT_SUCCESS);
+}
+
+
+/**
+ *  CLIENT LOOP
+**/
+void client_loop(int sock, struct sockaddr_in* first_addr) {
+  char line[MAX_LINE_LEN];
+  bool_t first;
+
+  puts("Hello. Commands:\n"
       "\t\"put <localfile> <remotefile>\" (<remotefile> will be OVERWRITTEN!)\n"
-      "\t\"get <localfile> <remotefile>\" (<localfile> will be OVERWRITTEN!)");
-  first = 1;
+      "\t\"get <localfile> <remotefile>\" (<localfile> will be OVERWRITTEN!)\n"
+      "Command ?");
+
+  first = TRUE;
   while (fgets(line, MAX_LINE_LEN, stdin) != NULL) {
     msg_t msg;
     char *localfilename;
+
     if (parse_req(line, &msg, &localfilename) == TRUE) {
-      if (first == 1) {
-        first = 0;
-        sendto_msg(sock, &srv_addr, &msg);
-        peek_connect(sock);
+      FILE *localfile;
+      int try;
+
+      /* controllo locale della richiesta */
+      localfile = fopen(localfilename, (msg.msg_t_u.req.reqtype == WRQ)? "wb":"rb");
+      if (localfile == NULL) {
+        fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+        puts("Command ?");
+        continue;
       }
-      else {
-        write_msg(sock, &msg);
-      }
-      /* gestione dell'operazione */
-      if (msg.msg_t_u.req.reqtype == WRQ) {
-        /* process WRQ*/
-        FILE* fin;
-        fin = fopen(localfilename, "rb");
-        if (fin == NULL) {
-          fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+
+      /* tentativi di invio della richiesta */
+      try = 0;
+      do {
+        /* invio della richiesta */
+        if (first == TRUE) {
+          sendto_msg(sock, first_addr, &msg);
         }
         else {
-          /* si passa ack0 = TRUE, in quanto il server risponde con ACK #0 */
-          put_file(sock, sock, fin, TRUE);
-          fclose(fin);
+          write_msg(sock, &msg);
         }
-      }
-      else {
-        /* process RRQ */
-        FILE* fout;
-        fout = fopen(localfilename, "wb");
-        if (fout == NULL) {
-          fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+
+        /* attesa di una risposta con MSG_PEEK (e connect se first == TRUE) */
+        if (wait_reply(sock, first) == TRUE) {
+          try = 0;
+          first = FALSE;
+          if (msg.msg_t_u.req.reqtype == WRQ) {
+            put_file(sock, sock, localfile, TRUE);
+          }
+          else {
+            get_file(sock, sock, localfile, FALSE);
+          }
+          fclose(localfile);
+          puts("operation complete");
         }
         else {
-          /* si passa ack0 = FALSE, e' gia' implicito nel messaggio di richiesta */
-          get_file(sock, sock, fout, FALSE);
-          fclose(fout);
+          try += 1;
         }
+      } while (try < MAX_TRY_COUNT);
+
+      /* troppi timeout */
+      if (try == MAX_TRY_COUNT) {
+        fprintf(stderr, "error: no reply from server\n");
       }
-      puts("operation complete");
+
     }
     else {
       fprintf(stderr, "local error: command not recognized\n");
     }
+
+    puts("Command ?");
   }
-  exit(EXIT_SUCCESS);
 }
 
 
@@ -174,16 +197,32 @@ bool_t parse_req(char* line, msg_t* msg, char** localfilename) {
 
 
 /**
- *  PEEK AND CONNECT
+ *  WAIT REPLY (AND CONNECT IF NEEDED)
 **/
-void peek_connect(int fd) {
-  struct sockaddr_in addr;
-  socklen_t addr_len = sizeof(addr);
+bool_t wait_reply(int sock, bool_t first) {
+  fd_set fds;
+  int rdy_count;
+  struct timeval timeout = {TIMEOUT, 0};
+  FD_ZERO(&fds);
+  FD_SET(sock, &fds);
 
-  memset(&addr, 0x00, addr_len);
-  if (!( (recvfrom(fd, in_buff, 1, MSG_PEEK, (struct sockaddr*)&addr, &addr_len) == 1)
-         && (connect(fd, (struct sockaddr*)&addr, addr_len) == 0) )) {
-    err(EXIT_FAILURE, "performing peek and connect");
+  rdy_count = select(sock + 1, &fds, NULL, NULL, &timeout);
+
+  if (rdy_count == 0) return FALSE;
+  if (rdy_count != 1) err(EXIT_FAILURE, "select() error");
+
+  if (first == TRUE) {
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    memset(&addr, 0x00, addr_len);
+    if (!( (recvfrom(sock, in_buff, 1, MSG_PEEK, (struct sockaddr*)&addr, &addr_len) == 1)
+           && (connect(sock, (struct sockaddr*)&addr, addr_len) == 0) )) {
+      err(EXIT_FAILURE, "performing peek and connect");
+    }
   }
+  else if (recvfrom(sock, in_buff, 1, MSG_PEEK, NULL, NULL) != 1) {
+      err(EXIT_FAILURE, "performing peek and connect");
+  }
+  return TRUE;
 }
 
