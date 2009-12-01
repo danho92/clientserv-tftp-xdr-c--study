@@ -106,7 +106,7 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
       int try;
 
       /* controllo locale della richiesta */
-      localfile = fopen(localfilename, (msg.msg_t_u.req.reqtype == WRQ)? "wb":"rb");
+      localfile = fopen(localfilename, (msg.msg_t_u.req.reqtype == WRQ)? "rb":"wb");
       if (localfile == NULL) {
         fprintf(stderr, "local error: couldn't open %s\n", localfilename);
         puts("Command ?");
@@ -134,13 +134,13 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
           else {
             get_file(sock, sock, localfile, FALSE);
           }
-          fclose(localfile);
           puts("operation complete");
         }
         else {
           try += 1;
         }
-      } while (try < MAX_TRY_COUNT);
+      } while ((try > 0) && (try < MAX_TRY_COUNT));
+      fclose(localfile);
 
       /* troppi timeout */
       if (try == MAX_TRY_COUNT) {
@@ -217,11 +217,11 @@ bool_t wait_reply(int sock, bool_t first) {
     memset(&addr, 0x00, addr_len);
     if (!( (recvfrom(sock, in_buff, 1, MSG_PEEK, (struct sockaddr*)&addr, &addr_len) == 1)
            && (connect(sock, (struct sockaddr*)&addr, addr_len) == 0) )) {
-      err(EXIT_FAILURE, "performing peek and connect");
+      err(EXIT_FAILURE, "'peeking' server reply and connecting");
     }
   }
   else if (recvfrom(sock, in_buff, 1, MSG_PEEK, NULL, NULL) != 1) {
-      err(EXIT_FAILURE, "performing peek and connect");
+      err(EXIT_FAILURE, "'peeking' server reply");
   }
   return TRUE;
 }

@@ -6,7 +6,7 @@
 
 #include "tftp.h"
 #include "xdr_udp_utils.h"
-
+#include <errno.h>
 
 /* prototipo del metodo di decoding usato da read_msg e recvfrom_msg */
 bool_t decode_msg(msg_t* msg);
