@@ -98,42 +98,62 @@ int main(int argc, char* argv[]) {
 void server_loop() {
   msg_t msg;
   int try;
+  bool_t error;
 
-  try = 0;
-
-  /* decodifica del primo messaggio. se valido, si salta la fase di fetch */
-  memset(&msg, 0x00, sizeof(msg));
-  if (xdr_msg_t(&in_xdrs, &msg) == TRUE) {
-    goto CHECK_REQ;
+  if (decode_msg(&msg) == FALSE) {
+    err_rep(1, ILL_OP_TFTP, "TFTP message expected");
+    error = TRUE;
+  }
+  else {
+    error = FALSE;
   }
 
-  while (try < MAX_TRY_COUNT) {
-    if (read_msg(0, &msg) == XDR_OK) {
-      /* messaggio valido */
-      CHECK_REQ:
-      if (msg.op == REQ) {
-        /* e' una richiesta */
+  while (error == FALSE) {
+    /* processamento del messaggio */
+    switch (msg.op) {
+      case REQ:
         if (msg.msg_t_u.req.reqtype == WRQ) {
           process_WRQ(msg.msg_t_u.req.filename);
         }
         else {
           process_RRQ(msg.msg_t_u.req.filename);
         }
-        try = 0;
-      }
-      /* free del messaggio (non e' piu' necessario) */
-      xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+        break;
+      case ERR:
+        error = TRUE;
+        break;
+      default:
+        err_rep(1, ILL_OP_TFTP, "not REQ");
+        error = TRUE;
+        break;
     }
-    try += 1;
+    xdr_free((xdrproc_t)xdr_msg_t, (char*)&msg);
+
+    /* recupero di un nuovo messaggio */
+    try = 0;
+    do {
+      switch (read_msg(0, &msg)) {
+        case XDR_OK:
+          try = 0;
+          break;
+        case XDR_FAIL:
+          err_rep(1, ILL_OP_TFTP, "TFTP message expected");
+          error = TRUE;
+          break;
+        case RET_TIMEOUT:
+          try += 1;
+          break;
+      }
+    } while ((try > 0) && (try < MAX_TRY_COUNT) && (error == FALSE));
+
+    /* niente errori, ma troppi tentativi */
+    if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
+      err_rep(1, NOT_DEFINED, "too many timeout. type faster!");
+      error = TRUE;
+    }
   }
 
-  /* il client probabilmente non ricevera' questo messaggio.            *
-   * in ogni caso terminera' alla prossima richiesta, per un errore di  *
-   * invio (host unreachable) (testato)                                 */
-  err_rep(1, NOT_DEFINED, "timeout - type faster!");
-
-  return;
-}
+} /* END OF: server_loop() */
 
 
 /**
