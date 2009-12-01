@@ -33,13 +33,14 @@ typedef enum read_msg_ret {
   RET_TIMEOUT
 } read_msg_ret_t;
 
-
 /* ricezione e decoding a timeout (xdr_free a carico del destinatario) */
+bool_t decode_msg(msg_t* msg);
 read_msg_ret_t read_msg(int fd, msg_t* msg);
 read_msg_ret_t recvfrom_msg(int sock, msg_t* msg, int flags,
                             struct sockaddr_in *addr, socklen_t *addr_len);
 
 /* encoding e invio */
+u_int encode_msg(msg_t* msg);
 void write_msg(int fd, msg_t* msg);
 void sendto_msg(int sock, struct sockaddr_in* srv_addr, msg_t* msg);
 
