@@ -1,7 +1,7 @@
 
 const MAX_FILENAME_LEN  = 500;
 const MAX_MODE_LEN      = 5;
-const MAX_BLOCK_SIZE  = 512;
+const MAX_BLOCK_SIZE    = 512;
 const MAX_ERRSTR_LEN    = 100;
 
 

@@ -72,8 +72,8 @@ int main(int argc, char* argv[]) {
 
     /* dup() su stdin, stdout, e stderr */
     if ((dup2(sock, 0) != 0) ||
-        (dup2(sock, 1) != 1) ||
-        (dup2(sock, 2) != 2) ) {
+        (dup2(sock, 1) != 1) /*||
+        (dup2(sock, 2) != 2)*/ ) {
       exit(EXIT_FAILURE);
     }
 
