@@ -41,31 +41,6 @@ read_msg_ret_t read_msg(int fd, msg_t* msg) {
   exit(EXIT_FAILURE);
 }
 
-/**
- *  RECVFROM TFTP MESSAGE | DECODE
-**/
-read_msg_ret_t recvfrom_msg(int sock, msg_t* msg, int flags,
-                            struct sockaddr_in *addr, socklen_t *addr_len) {
-  fd_set fds;
-  int rdy_count;
-  struct timeval timeout = {TIMEOUT, 0};
-
-  FD_ZERO(&fds);
-  FD_SET(sock, &fds);
-  rdy_count = select(sock + 1, &fds, NULL, NULL, &timeout);
-  switch (rdy_count) {
-    case 0:
-      return RET_TIMEOUT;
-    case 1:
-      if (recvfrom(sock, in_buff, MAX_BLOCK_SIZE, flags,
-        (struct sockaddr*)addr, addr_len) > 0) {
-        return (decode_msg(msg) == TRUE)? XDR_OK:XDR_FAIL;
-      }
-  }
-  /* errore fatale recvfrom o select */
-  exit(EXIT_FAILURE);
-}
-
 
 /**
  *  ENCODE TFTP MESSAGE
@@ -74,6 +49,7 @@ u_int encode_msg(msg_t* msg) {
   u_int size;
   if (! ((xdr_setpos(&out_xdrs, 0) == TRUE) &&
          (xdr_msg_t(&out_xdrs, msg) == TRUE)) ) {
+    /* errore fatale di encoding XDR */
     exit(EXIT_FAILURE);
   }
   return xdr_getpos(&out_xdrs) + 1;
@@ -85,6 +61,7 @@ u_int encode_msg(msg_t* msg) {
 void write_msg(int fd, msg_t* msg) {
   u_int size = encode_msg(msg);
   if (write(fd, out_buff, size) != size) {
+    /* errore fatale write */
     exit(EXIT_FAILURE);
   }
 }
@@ -96,6 +73,7 @@ void sendto_msg(int sock, struct sockaddr_in* srv_addr, msg_t* msg) {
   u_int size = encode_msg(msg);
   if (sendto(sock, out_buff, size, 0,
               (struct sockaddr*)srv_addr, sizeof(struct sockaddr_in)) != size) {
+    /* errore fatale sendto */
     exit(EXIT_FAILURE);
   }
 }
@@ -128,7 +106,7 @@ void write_ERR(int fd, errcode_t errcode, char* errstr) {
 **/
 void err_rep(int fd, errcode_t errcode, char* errstr) {
   if (USE_STDERR == TRUE) {
-    fprintf(stderr, "local error: %s\n", errstr);
+    fprintf(stderr, "Local error: %s\n", errstr);
   }
   write_ERR(fd, errcode, errstr);
 }
@@ -151,7 +129,7 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
   error = FALSE;
   blocknum = 1;
   try = 0;
-  while ((try < MAX_TRY_COUNT) && (error == FALSE)) {
+  do {
     switch (read_msg(in, &msg)) {
       /************************************************************************/
       case XDR_OK:                                      /* 1: messaggio TFTP  */
@@ -161,8 +139,9 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
             dat = &(msg.msg_t_u.dat);
             switch (blocknum - (dat->blocknum)) {
               case 0:                                   /* 1.1-A: DAT giusto  */
-                if (fwrite(dat->block.block_val, dat->block.block_len, 1, fout) != 1) {
-                  err_rep(out, ACCESS_VIOLATION, "writing output file");
+                if (fwrite(dat->block.block_val, 1,
+                          dat->block.block_len, fout) != dat->block.block_len) {
+                  err_rep(out, ACCESS_VIOLATION, ERR_FWRITE);
                   error = TRUE;
                 }
                 else {
@@ -179,11 +158,11 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
                 break;
               case 1:                                   /* 1.1-B: DAT preced. */
                 write_ACK(out, blocknum - 1);
-                /* l'ack precedente e' andato perso: aumento del try count*/
+                /* l'ack precedente e' andato perso: aumento del try count */
                 try += 1;
                 break;
               default:                                  /* 1.1-C: DAT errato  */
-                err_rep(out, ILL_OP_TFTP, "bad DAT");
+                err_rep(out, ILL_OP_TFTP, ERR_BAD_DAT);
                 error = TRUE;
                 break;
             }
@@ -191,13 +170,13 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
 
           case ERR:                                     /* 1.2: messaggio ERR */
             if (USE_STDERR == TRUE) {
-              fprintf(stderr, "remote error: %s\n", msg.msg_t_u.err.errstr);
+              fprintf(stderr, "Remote error: %s\n", msg.msg_t_u.err.errstr);
             }
             error = TRUE;
             break;
 
           default:                                      /* 1.3: altro mess.   */
-            err_rep(out, ILL_OP_TFTP, "not DAT");
+            err_rep(out, ILL_OP_TFTP, ERR_NOT_DAT);
             error = TRUE;
             break;
         }
@@ -205,7 +184,7 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
         break;
       /************************************************************************/
       case XDR_FAIL:                                    /* 2: mess. non TFTP  */
-        err_rep(out, ILL_OP_TFTP, "TFTP message expected");
+        err_rep(out, ILL_OP_TFTP, ERR_NOT_MSG);
         error = TRUE;
         break;
       /************************************************************************/
@@ -213,11 +192,11 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
         try +=1;
         break;
     }
-  }
+  } while ((try > 0) && (try < MAX_TRY_COUNT) && (error == FALSE));
 
   /* niente errori, ma troppi tentativi */
   if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-    err_rep(out, NOT_DEFINED, "too many timeout");
+    err_rep(out, NOT_DEFINED, ERR_TIMEOUTS);
   }
 } /* END OF: get_file() */
 
@@ -255,9 +234,8 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
 
     /* lettura del blocco dal file */
     size = fread(buff, 1, MAX_BLOCK_SIZE, fin);
-    //fprintf(stderr,"%d\n",size); TEMP
     if (size < 0) {
-      err_rep(out, ACCESS_VIOLATION, "reading file");
+      err_rep(out, ACCESS_VIOLATION, ERR_FREAD);
       return;
     }
     /* preparazione dat */
@@ -265,7 +243,6 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
     dat->block.block_len = size;
     dat->block.block_val = malloc(size);
     if (dat->block.block_val == NULL) {
-      err_rep(out, ACCESS_VIOLATION, "allocating memory");
       /* questo e' un errore grave, si esce bruscamente */
       exit(EXIT_FAILURE);
     }
@@ -287,20 +264,20 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
                 try = 0;
               }
               else {
-                err_rep(out, ILL_OP_TFTP, "bad ACK");
+                err_rep(out, ILL_OP_TFTP, ERR_BAD_ACK);
                 error = TRUE;
               }
               break;
 
             case ERR:                                   /* 1.2: messaggio ERR */
               if (USE_STDERR == TRUE) {
-                fprintf(stderr, "remote error: %s\n", in_msg.msg_t_u.err.errstr);
+                fprintf(stderr, "Remote error: %s\n", in_msg.msg_t_u.err.errstr);
               }
               error = TRUE;
               break;
 
             default:                                    /* 1.3: altro mess.   */
-              err_rep(out, ILL_OP_TFTP, "not ACK");
+              err_rep(out, ILL_OP_TFTP, ERR_NOT_ACK);
               error = TRUE;
               break;
           }
@@ -308,7 +285,7 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
           break;
         /**********************************************************************/
         case XDR_FAIL:                                  /* 2: mess. non TFTP  */
-          err_rep(out, ILL_OP_TFTP, "TFTP message expected");
+          err_rep(out, ILL_OP_TFTP, ERR_NOT_MSG);
           error = TRUE;
           break;
         /**********************************************************************/
@@ -320,7 +297,7 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
 
     /* niente errori, ma troppi tentativi */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-      err_rep(out, NOT_DEFINED, "too many timeout");
+      err_rep(out, NOT_DEFINED, ERR_TIMEOUTS);
       error = TRUE;
     }
 

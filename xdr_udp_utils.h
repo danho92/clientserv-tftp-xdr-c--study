@@ -10,10 +10,20 @@
 
 
 #define MAX_RAW_MSG_SIZE    (8192)
-#define TIMEOUT             (2)
+#define TIMEOUT             (1)
 #define MAX_TRY_COUNT       (16)
 #define PORT_ANY            (htons(0))
 
+#define ERR_TIMEOUTS        "too many timeouts"
+#define ERR_NOT_MSG         "not TFTP message"
+#define ERR_BAD_ACK         "bad TFTP ACK"
+#define ERR_NOT_ACK         "not TFTP ACK"
+#define ERR_BAD_DAT         "bad TFTP DAT"
+#define ERR_NOT_DAT         "not TFTP DAT"
+#define ERR_NOT_REQ         "not TFTP REQ"
+#define ERR_FOPEN           "could not open file"
+#define ERR_FREAD           "could not read from file"
+#define ERR_FWRITE          "could not write to file"
 
 /* gli stream xdr vanno inizializzati (con xdrmem_create) prima dell' *
  * utilizzo delle funzioni che lavorano con XDR                       */
@@ -36,8 +46,6 @@ typedef enum read_msg_ret {
 /* ricezione e decoding a timeout (xdr_free a carico del destinatario) */
 bool_t decode_msg(msg_t* msg);
 read_msg_ret_t read_msg(int fd, msg_t* msg);
-read_msg_ret_t recvfrom_msg(int sock, msg_t* msg, int flags,
-                            struct sockaddr_in *addr, socklen_t *addr_len);
 
 /* encoding e invio */
 u_int encode_msg(msg_t* msg);

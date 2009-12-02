@@ -100,7 +100,7 @@ void server_loop() {
 
   /* il primo messaggio e' gia' nel buffer associato allo stream XDR */
   if (decode_msg(&msg) == FALSE) {
-    err_rep(1, ILL_OP_TFTP, "TFTP message expected");
+    err_rep(1, ILL_OP_TFTP, ERR_NOT_MSG);
     error = TRUE;
   }
   else {
@@ -122,7 +122,7 @@ void server_loop() {
         error = TRUE;
         break;
       default:
-        err_rep(1, ILL_OP_TFTP, "not REQ");
+        err_rep(1, ILL_OP_TFTP, ERR_NOT_REQ);
         error = TRUE;
         break;
     }
@@ -136,7 +136,7 @@ void server_loop() {
           try = 0;
           break;
         case XDR_FAIL:
-          err_rep(1, ILL_OP_TFTP, "TFTP message expected");
+          err_rep(1, ILL_OP_TFTP, ERR_NOT_MSG);
           error = TRUE;
           break;
         case RET_TIMEOUT:
@@ -147,7 +147,7 @@ void server_loop() {
 
     /* nessun errore, ma troppi tentativi */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-      err_rep(1, NOT_DEFINED, "too many timeout. type faster!");
+      err_rep(1, NOT_DEFINED, ERR_TIMEOUTS);
       error = TRUE;
     }
   }
@@ -161,7 +161,7 @@ void server_loop() {
 void process_WRQ(const char* filename) {
   FILE* fout = fopen(filename, "wb");
   if (fout == NULL) {
-    err_rep(1, ACCESS_VIOLATION, "opening file");
+    err_rep(1, ACCESS_VIOLATION, ERR_FOPEN);
     return;
   }
 
@@ -177,7 +177,7 @@ void process_WRQ(const char* filename) {
 void process_RRQ(const char* filename) {
   FILE* fin = fopen(filename, "rb");
   if (fin == NULL) {
-    err_rep(1, ACCESS_VIOLATION, "opening file");
+    err_rep(1, ACCESS_VIOLATION, ERR_FOPEN);
     return;
   }
 
