@@ -33,7 +33,7 @@ read_msg_ret_t read_msg(int fd, msg_t* msg) {
     case 0:
       return RET_TIMEOUT;
     case 1:
-      if (read(fd, in_buff, MAX_BLOCK_SIZE) > 0) {
+      if (read(fd, in_buff, MAX_RAW_MSG_SIZE) > 0) {
         return (decode_msg(msg) == TRUE)? XDR_OK:XDR_FAIL;
       }
   }
@@ -52,7 +52,7 @@ u_int encode_msg(msg_t* msg) {
     /* errore fatale di encoding XDR */
     exit(EXIT_FAILURE);
   }
-  return xdr_getpos(&out_xdrs) + 1;
+  return xdr_getpos(&out_xdrs) /*+ 1*/;
 }
 
 /**
@@ -129,7 +129,7 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
   error = FALSE;
   blocknum = 1;
   try = 0;
-  do {
+  while ((try < MAX_TRY_COUNT) && (error == FALSE)) {
     switch (read_msg(in, &msg)) {
       /************************************************************************/
       case XDR_OK:                                      /* 1: messaggio TFTP  */
@@ -139,7 +139,16 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
             dat = &(msg.msg_t_u.dat);
             switch (blocknum - (dat->blocknum)) {
               case 0:                                   /* 1.1-A: DAT giusto  */
-                if (fwrite(dat->block.block_val, 1,
+
+    {
+      int i;
+      fprintf(stderr, "GET block #%d:\t%d B\n\tpos:%d\n", dat->blocknum, dat->block.block_len, ftell(fout));//debug
+      for(i = 0; i < dat->block.block_len; ++i) {
+        fprintf(stderr, "%d ", dat->block.block_val[i]);
+      }
+      fprintf(stderr,"\n\n");
+    }
+               if (fwrite(dat->block.block_val, 1,
                           dat->block.block_len, fout) != dat->block.block_len) {
                   err_rep(out, ACCESS_VIOLATION, ERR_FWRITE);
                   error = TRUE;
@@ -192,7 +201,7 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
         try +=1;
         break;
     }
-  } while ((try > 0) && (try < MAX_TRY_COUNT) && (error == FALSE));
+  }
 
   /* niente errori, ma troppi tentativi */
   if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
@@ -237,6 +246,14 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
     if (size < 0) {
       err_rep(out, ACCESS_VIOLATION, ERR_FREAD);
       return;
+    }
+    {
+      int i;
+      fprintf(stderr, "PUT block #%d:\t%d B\n\tpos:%d\n", blocknum, size,ftell(fin));//debug
+      for(i = 0; i < size; ++i) {
+        fprintf(stderr, "%d ", buff[i]);
+      }
+      fprintf(stderr,"\n\n");
     }
     /* preparazione dat */
     dat->blocknum = blocknum;
