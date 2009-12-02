@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
   /* creazione del socket di comunicazione */
   sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (errno != 0) {
-    err(EXIT_FAILURE, "couldn't create com socket.");
+    err(EXIT_FAILURE, "could not create com socket.");
   }
 
   /* bind del socket */
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
   cli_addr.sin_port         = PORT_ANY;
   bind(sock, (struct sockaddr*)&cli_addr, sizeof(cli_addr));
   if (errno != 0) {
-    err(EXIT_FAILURE, "couldn't bind com socket.");
+    err(EXIT_FAILURE, "could not bind com socket.");
   }
 
   /* init degli stream xdr */
@@ -108,7 +108,7 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
       /* controllo locale della richiesta */
       localfile = fopen(localfilename, (msg.msg_t_u.req.reqtype == WRQ)? "rb":"wb");
       if (localfile == NULL) {
-        fprintf(stderr, "local error: couldn't open %s\n", localfilename);
+        fprintf(stderr, "Local error: could not open %s\n", localfilename);
         puts("Command ?");
         continue;
       }
@@ -134,7 +134,7 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
           else {
             get_file(sock, sock, localfile, FALSE);
           }
-          puts("operation complete");
+          puts("Operation complete.");
         }
         else {
           try += 1;
@@ -144,12 +144,12 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
 
       /* troppi timeout */
       if (try == MAX_TRY_COUNT) {
-        fprintf(stderr, "error: no reply from server\n");
+        fprintf(stderr, "Error: no reply from server\n");
       }
 
     }
     else {
-      fprintf(stderr, "local error: command not recognized\n");
+      fprintf(stderr, "Local error: command not recognized\n");
     }
 
     puts("Command ?");
