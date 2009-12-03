@@ -139,15 +139,6 @@ void get_file(int in, int out, FILE* fout, bool_t ack0) {
             dat = &(msg.msg_t_u.dat);
             switch (blocknum - (dat->blocknum)) {
               case 0:                                   /* 1.1-A: DAT giusto  */
-
-    {
-      int i;
-      fprintf(stderr, "GET block #%d:\t%d B\n\tpos:%d\n", dat->blocknum, dat->block.block_len, ftell(fout));//debug
-      for(i = 0; i < dat->block.block_len; ++i) {
-        fprintf(stderr, "%d ", dat->block.block_val[i]);
-      }
-      fprintf(stderr,"\n\n");
-    }
                if (fwrite(dat->block.block_val, 1,
                           dat->block.block_len, fout) != dat->block.block_len) {
                   err_rep(out, ACCESS_VIOLATION, ERR_FWRITE);
@@ -246,14 +237,6 @@ void put_file(int in, int out, FILE* fin, bool_t ack0) {
     if (size < 0) {
       err_rep(out, ACCESS_VIOLATION, ERR_FREAD);
       return;
-    }
-    {
-      int i;
-      fprintf(stderr, "PUT block #%d:\t%d B\n\tpos:%d\n", blocknum, size,ftell(fin));//debug
-      for(i = 0; i < size; ++i) {
-        fprintf(stderr, "%d ", buff[i]);
-      }
-      fprintf(stderr,"\n\n");
     }
     /* preparazione dat */
     dat->blocknum = blocknum;
