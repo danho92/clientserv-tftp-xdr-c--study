@@ -3,7 +3,6 @@
 #include <sys/types.h>
 
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -16,18 +15,20 @@ void server_loop();
 void process_WRQ(const char* filename);
 void process_RRQ(const char* filename);
 
+
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
- * casi eccezionali (es. inizializzazione e prima recvfrom() )            */
+ * casi eccezionali (es. inizializzazione stream XDR e prima recvfrom() ) */
 XDR in_xdrs;
 char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
 char out_buff[MAX_RAW_MSG_SIZE];
 
+/* comunicazione a xdr_udp_utils che non si dispone di stderr */
 bool_t USE_STDERR = FALSE;
 
 
 /**
- *  MAIN
+ *  SERVER MAIN
 **/
 int main(int argc, char* argv[]) {
   pid_t pid;
@@ -146,7 +147,7 @@ void server_loop() {
 
     /* nessun errore, ma troppi tentativi: uscita per inattivita' */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-      err_rep(1, NOT_DEFINED, "exit");
+      err_rep(1, NOT_DEFINED, "timeout for inactivity");
       error = TRUE;
     }
   }
@@ -163,7 +164,6 @@ void process_WRQ(const char* filename) {
     err_rep(1, ACCESS_VIOLATION, ERR_FOPEN);
     return;
   }
-
   /* ack0 = TRUE perche' il client deve sapere che REQ e' stato accettato */
   get_file(0, 1, fout, TRUE);
   fclose(fout);
@@ -179,7 +179,6 @@ void process_RRQ(const char* filename) {
     err_rep(1, ACCESS_VIOLATION, ERR_FOPEN);
     return;
   }
-
   /* ack0 = FALSE perche', lato client, l'ACK #0 e' il messaggio REQ */
   put_file(0, 1, fin, FALSE);
   fclose(fin);

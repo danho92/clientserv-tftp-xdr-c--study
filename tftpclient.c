@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <rpc/xdr.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 
 #include <err.h>
@@ -19,6 +20,7 @@ void client_loop(int sock, struct sockaddr_in* first_addr);
 bool_t parse_req(char* line, msg_t* msg, char** localfilename);
 bool_t wait_reply(int sock, bool_t first);
 
+
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
  * casi eccezionali                                                       */
 XDR in_xdrs;
@@ -26,6 +28,7 @@ char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
 char out_buff[MAX_RAW_MSG_SIZE];
 
+/* comunicazione a xdr_udp_utils che si dispone di stderr */
 bool_t USE_STDERR = TRUE;
 
 

@@ -1,12 +1,13 @@
+#include <rpc/xdr.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "tftp.h"
 #include "xdr_udp_utils.h"
-#include <errno.h>
 
 
 /**
