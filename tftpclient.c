@@ -20,7 +20,7 @@ bool_t parse_req(char* line, msg_t* msg, char** localfilename);
 bool_t wait_reply(int sock, bool_t first);
 
 /* queste variabili sono usate da xdr_udp_utils, vanno usate qui solo in  *
- * casi eccezionali (es. inizializzazione e prima recvfrom() )            */
+ * casi eccezionali                                                       */
 XDR in_xdrs;
 char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
@@ -77,11 +77,10 @@ int main(int argc, char* argv[]) {
   xdrmem_create(&in_xdrs,  in_buff,  MAX_RAW_MSG_SIZE, XDR_DECODE);
   xdrmem_create(&out_xdrs, out_buff, MAX_RAW_MSG_SIZE, XDR_ENCODE);
 
-  /* passaggio del controllo al client TFTP */
+  /* passaggio del controllo alla routine client TFTP */
   client_loop(sock, &srv_addr);
-
   exit(EXIT_SUCCESS);
-}
+} /* END OF: main() */
 
 
 /**
@@ -154,7 +153,7 @@ void client_loop(int sock, struct sockaddr_in* first_addr) {
 
     puts("Command ?");
   }
-}
+} /* END OF: client_loop() */
 
 
 /**
@@ -193,7 +192,7 @@ bool_t parse_req(char* line, msg_t* msg, char** localfilename) {
   msg->msg_t_u.req.mode = "octet";
 
   return TRUE;
-}
+} /* END OF: parse_request() */
 
 
 /**
@@ -212,6 +211,8 @@ bool_t wait_reply(int sock, bool_t first) {
   if (rdy_count != 1) err(EXIT_FAILURE, "select() error");
 
   if (first == TRUE) {
+    /* recupero dell'indirizzo server mediante recvfrom con flag MSG_PEEK *
+     * e connessione UDP nel caso in cui si tratti del primo messaggio   */
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
     memset(&addr, 0x00, addr_len);
@@ -220,9 +221,6 @@ bool_t wait_reply(int sock, bool_t first) {
       err(EXIT_FAILURE, "'peeking' server reply and connecting");
     }
   }
-  else if (recvfrom(sock, in_buff, 1, MSG_PEEK, NULL, NULL) != 1) {
-      err(EXIT_FAILURE, "'peeking' server reply");
-  }
   return TRUE;
-}
+} /* END OF: wait_reply() */
 

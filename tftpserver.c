@@ -23,7 +23,6 @@ char in_buff[MAX_RAW_MSG_SIZE];
 XDR out_xdrs;
 char out_buff[MAX_RAW_MSG_SIZE];
 
-/* stderr non disponibile (flag richiesta dal modulo xdr_udp_utils) */
 bool_t USE_STDERR = FALSE;
 
 
@@ -72,8 +71,8 @@ int main(int argc, char* argv[]) {
 
     /* dup() su stdin, stdout, e stderr */
     if ((dup2(sock, 0) != 0) ||
-        (dup2(sock, 1) != 1) /*||
-        (dup2(sock, 2) != 2)*/ ) {
+        (dup2(sock, 1) != 1) ||
+        (dup2(sock, 2) != 2) ) {
       exit(EXIT_FAILURE);
     }
 
@@ -87,7 +86,7 @@ int main(int argc, char* argv[]) {
   }
   /* PARENT */
   exit(EXIT_SUCCESS);
-}
+} /* END OF: main() */
 
 
 /**
@@ -145,9 +144,9 @@ void server_loop() {
       }
     } while ((try > 0) && (try < MAX_TRY_COUNT) && (error == FALSE));
 
-    /* nessun errore, ma troppi tentativi */
+    /* nessun errore, ma troppi tentativi: uscita per inattivita' */
     if ((error == FALSE) && (try == MAX_TRY_COUNT)) {
-      err_rep(1, NOT_DEFINED, ERR_TIMEOUTS);
+      err_rep(1, NOT_DEFINED, "exit");
       error = TRUE;
     }
   }
